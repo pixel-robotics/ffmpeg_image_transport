@@ -71,13 +71,15 @@ void FFMPEGSubscriber::initialize(rclcpp::Node * node)
   decoder_.setMeasurePerformance(mp);
 }
 
-void FFMPEGSubscriber::internalCallback(const FFMPEGPacketConstPtr & msg, const Callback & user_cb)
+void FFMPEGSubscriber::internalCallback(const CompressedVideoConstPtr & msg, const Callback & user_cb)
 {
   if (!decoder_.isInitialized()) {
+    // FIXME here we run into problems
+    // how do we figure this out?
     if (msg->flags == 0) {
       return;  // wait for key frame!
     }
-    if (msg->encoding.empty()) {
+    if (msg->format.empty()) {
       RCLCPP_ERROR_STREAM(logger_, "no encoding provided!");
       return;
     }

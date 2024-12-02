@@ -21,6 +21,7 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include <sensor_msgs/image_encodings.hpp>
 #include <unordered_map>
+#include "ffmpeg_image_transport/safe_param.hpp"
 
 namespace ffmpeg_image_transport
 {
@@ -59,15 +60,16 @@ void FFMPEGDecoder::reset()
 }
 
 bool FFMPEGDecoder::initialize(
-  const FFMPEGPacketConstPtr & msg, Callback callback, const std::string & dec)
+  const CompressedVideoConstPtr & msg, Callback callback, const std::string & dec)
 {
   std::string decoder = dec;
   if (decoder.empty()) {
-    RCLCPP_INFO_STREAM(logger_, "no decoder for encoding: " << msg->encoding);
+    RCLCPP_INFO_STREAM(logger_, "no decoder for encoding: " << msg->format);
     return (false);
   }
   callback_ = callback;
-  encoding_ = msg->encoding;
+  encoding_ = msg->format;
+  // TODO figure out how to get with and heigt from data
   return (initDecoder(msg->width, msg->height, encoding_, decoder));
 }
 
@@ -189,24 +191,24 @@ bool FFMPEGDecoder::initDecoder(
   return (true);
 }
 
-bool FFMPEGDecoder::decodePacket(const FFMPEGPacketConstPtr & msg)
+bool FFMPEGDecoder::decodePacket(const CompressedVideoConstPtr & msg)
 {
   rclcpp::Time t0;
   if (measurePerformance_) {
     t0 = rclcpp::Clock().now();
   }
-  if (msg->encoding != encoding_) {
+  if (msg->format != encoding_) {
     RCLCPP_ERROR_STREAM(
-      logger_, "no on-the fly encoding change from " << encoding_ << " to " << msg->encoding);
+      logger_, "no on-the fly encoding change from " << encoding_ << " to " << msg->format);
     return (false);
   }
   AVCodecContext * ctx = codecContext_;
   AVPacket * packet = av_packet_alloc();
   av_new_packet(packet, msg->data.size());  // will add some padding!
   memcpy(packet->data, &msg->data[0], msg->data.size());
-  packet->pts = msg->pts;
-  packet->dts = packet->pts;
-  ptsToStamp_[packet->pts] = msg->header.stamp;
+  packet->pts = msg->timestamp;
+  packet->dts = packet->timestamp;
+  ptsToStamp_[packet->pts] = msg->timestamp;
   int ret = avcodec_send_packet(ctx, packet);
   if (ret != 0) {
     RCLCPP_WARN_STREAM(logger_, "send_packet failed for pts: " << msg->pts);
