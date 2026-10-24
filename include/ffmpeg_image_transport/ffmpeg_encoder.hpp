@@ -138,8 +138,16 @@ private:
   std::string preset_;     // e.g. "slow", "medium", "lossless"
   std::string profile_;    // e.g. "main", "high", "rext"
   std::string tune_;       // e.g. "tune"
+  // used instead when the encoder above cannot be opened, e.g. h264_nvenc on a
+  // GeForce GPU whose concurrent NVENC sessions are all taken; empty: no fallback
+  std::string fallbackCodecName_;
+  std::string fallbackProfile_;
+  std::string fallbackPreset_;
+  std::string fallbackTune_;
   std::string delay_;      // default is 4 frames for parallel processing. 0 is lowest latency
   int qmax_{0};            // max allowed quantization. The lower the better quality
+  // min allowed quantization, -1: codec default. h264_nvenc applies qmax only if qmin is set too
+  int qmin_{-1};
   int GOPSize_{15};        // distance between two keyframes
   AVPixelFormat pixFormat_{AV_PIX_FMT_NONE};
   AVRational timeBase_{1, 100};
