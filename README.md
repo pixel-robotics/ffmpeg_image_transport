@@ -84,7 +84,15 @@ The plugin has a few parameters that allow for some amount of control.
 - ``gop_size``: The number of frames inbetween keyframes. Default is ``15``.
   The larger this number the more latency you will have, but also the more efficient
   the transmission becomes.
+- ``fallback.encoding``, ``fallback.profile``, ``fallback.preset``, ``fallback.tune``:
+  encoder (and its settings) to use instead if ``encoding`` cannot be opened, for
+  instance ``libx264`` behind ``h264_nvenc`` for machines without an NVENC capable GPU,
+  or GeForce GPUs whose limited concurrent NVENC sessions are all taken. Default: no fallback.
 - ``bit_rate``: The max bit rate [in bits/s] that the encoding will target. Default is ``8242880`.
+- ``qmax``, ``qmin``: Quantizer bounds (lower is better quality). Default ``qmax`` is ``10``,
+  ``qmin`` keeps the codec default. ``h264_nvenc`` only applies them when both are set.
+  Note that the encoder assumes 100 frames/s for its rate control, so at lower frame rates
+  the quantizer bounds rather than ``bit_rate`` decide the quality.
 
 The parameters are under the ``ffmpeg_image_transport`` variable block. So if you launch
 your publisher node (camera driver), you can give it a parameter list on the way like so:

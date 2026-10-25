@@ -97,13 +97,19 @@ void FFMPEGEncoder::setParameters(rclcpp::Node * node)
   tune_ = get_safe_param<std::string>(node, ns + "tune", "");
   delay_ = get_safe_param<std::string>(node, ns + "delay", "");
   qmax_ = get_safe_param<int>(node, ns + "qmax", 10);
+  qmin_ = get_safe_param<int>(node, ns + "qmin", -1);
   bitRate_ = get_safe_param<int64_t>(node, ns + "bit_rate", 8242880);
   GOPSize_ = get_safe_param<int64_t>(node, ns + "gop_size", 15);
   pixFormat_ = pixelFormat(get_safe_param<std::string>(node, ns + "pixel_format", ""));
+  fallbackCodecName_ = get_safe_param<std::string>(node, ns + "fallback.encoding", "");
+  fallbackProfile_ = get_safe_param<std::string>(node, ns + "fallback.profile", "");
+  fallbackPreset_ = get_safe_param<std::string>(node, ns + "fallback.preset", "");
+  fallbackTune_ = get_safe_param<std::string>(node, ns + "fallback.tune", "");
   RCLCPP_INFO_STREAM(
     logger_, "enc: " << codecName_ << " prof: " << profile_ << " preset: " << preset_);
   RCLCPP_INFO_STREAM(
-    logger_, "qmax: " << qmax_ << " bitrate: " << bitRate_ << " gop: " << GOPSize_);
+    logger_, "qmin: " << qmin_ << " qmax: " << qmax_ << " bitrate: " << bitRate_
+                      << " gop: " << GOPSize_);
 }
 
 bool FFMPEGEncoder::initialize(int width, int height, Callback callback)
@@ -165,9 +171,28 @@ bool FFMPEGEncoder::openCodec(int width, int height)
   try {
     doOpenCodec(width, height);
   } catch (const std::runtime_error & e) {
-    RCLCPP_ERROR_STREAM(logger_, e.what());
     closeCodec();
-    return (false);
+    if (fallbackCodecName_.empty() || fallbackCodecName_ == codecName_) {
+      RCLCPP_ERROR_STREAM(logger_, e.what());
+      return (false);
+    }
+    // e.g. h264_nvenc: no NVENC capable GPU/driver library, or all concurrent
+    // encoder sessions taken (GeForce cards allow only a few)
+    RCLCPP_WARN_STREAM(
+      logger_, "cannot open encoder " << codecName_ << " (" << e.what() << "), falling back to "
+                                      << fallbackCodecName_);
+    codecName_ = fallbackCodecName_;
+    profile_ = fallbackProfile_;
+    preset_ = fallbackPreset_;
+    tune_ = fallbackTune_;
+    fallbackCodecName_.clear();
+    try {
+      doOpenCodec(width, height);
+    } catch (const std::runtime_error & e2) {
+      RCLCPP_ERROR_STREAM(logger_, e2.what());
+      closeCodec();
+      return (false);
+    }
   }
   RCLCPP_DEBUG_STREAM(
     logger_, "intialized codec " << codecName_ << " for image: " << width << "x" << height);
@@ -202,6 +227,9 @@ void FFMPEGEncoder::doOpenCodec(int width, int height)
   }
   codecContext_->bit_rate = bitRate_;
   codecContext_->qmax = qmax_;  // 0: highest, 63: worst quality bound
+  if (qmin_ >= 0) {
+    codecContext_->qmin = qmin_;
+  }
   codecContext_->width = width;
   codecContext_->height = height;
   codecContext_->time_base = timeBase_;
